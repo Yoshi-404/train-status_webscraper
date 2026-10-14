@@ -149,6 +149,8 @@ class TestParseRouteHtml(unittest.TestCase):
         self.assertEqual(step.estimated_time, "2時間30分")
         self.assertEqual(step.fare_yen, 13870)
         self.assertIn("13,870円", step.fare)
+        self.assertIn("乗車券：8,910円", step.fare)
+        self.assertIn("自由席：4,960円", step.fare)
 
     def test_parse_transfer_wakayama_namba(self):
         html = load_fixture("transfer_wakayama_namba.html")

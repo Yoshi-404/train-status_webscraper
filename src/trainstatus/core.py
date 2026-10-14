@@ -373,8 +373,21 @@ def parse_route_html(
                 if total_step_yen > 0:
                     step_fare_yen = total_step_yen
                     if len(fares_found) > 1:
-                        # Shinkansen等の複数料金合算（例：13,870円 (乗車券 8,910円 / 自由席 4,960円)）
-                        breakdown = " + ".join(fares_found)
+                        # 特殊料金（自由席・指定席・特急等）と運賃（乗車券）を判別してラベル補完
+                        has_special = any(
+                            k in f for f in fares_found for k in ["自由席", "指定席", "特別料金", "特急", "グリーン"]
+                        )
+                        labeled_fares = []
+                        for f in fares_found:
+                            if has_special and not any(
+                                k in f for k in ["自由席", "指定席", "特別料金", "特急", "グリーン", "乗車券"]
+                            ):
+                                labeled_fares.append(f"乗車券：{f}")
+                            else:
+                                labeled_fares.append(f)
+                        # 乗車券を先頭に整列
+                        labeled_fares.sort(key=lambda x: 0 if "乗車券" in x else 1)
+                        breakdown = " + ".join(labeled_fares)
                         step_fare_str = f"{total_step_yen:,}円 ({breakdown})"
                     else:
                         step_fare_str = fares_found[0]
