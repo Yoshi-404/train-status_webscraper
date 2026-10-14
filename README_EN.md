@@ -1,79 +1,160 @@
-# Transit Route Search CLI 🚉
+# Transit Route Search CLI & Python Library 🚉 (v0.1.0)
 
-A Python command-line script that fetches transit route info (travel time, transfer count, fare, and step-by-step transfer details) from Yahoo! Transit (Japan).
+A Python command-line tool and library for fetching transit route info (travel time, transfer count, fare, and step-by-step transfer details) from Yahoo! Transit (Japan). Supports nationwide searches across Japan including Shinkansen bullet trains, limited express trains, highway buses, and domestic flights.
 
-[日本語版 README はこちら](./README.md)
+[日本語版 README はこちら](README.md)
 
-## Features
+---
 
-- Interactively prompts for a departure station and destination station
-- Lets you choose between "depart-by" and "arrive-by" search types
-- Lets you search using today's date/time or a custom date and time
-- Prints the following for the resulting route:
-  - Total travel time
-  - Number of transfers
-  - Fare
-  - Station name, line name, travel time, and segment fare for each leg
+## Key Features
 
-## Requirements
+- **Nationwide Route Search**: Search routes across all of Japan, taking advantage of Shinkansen, limited express trains, highway buses, local buses, and flights.
+- **Both Library & CLI Support**:
+  - Use programmatically via `search_route()` to receive a structured `Route` dataclass in your bots, apps, or scripts.
+  - Interactive terminal tool (`train-search` or `python train.py`).
+- **Dynamic Date & Time**: Removed hardcoded year (`2025`); automatically uses the current year and time.
+- **Safe Query Construction**: Built with `requests` parameter dictionaries (`params=`) for proper, automatic URL encoding.
+- **Robust Error Handling & HTML Parser**:
+  - Request timeouts (default: 10s)
+  - HTTP status validation with `response.raise_for_status()`
+  - Explicit `RouteNotFoundError` exception when station names are invalid or no routes are found
+  - Defensive `None` checking for all parsed HTML elements
 
-- Python 3.9+
+---
 
-### Dependencies
+## Installation
 
-```
-requests
-beautifulsoup4
-```
-
-Install with:
+### Install Directly via GitHub (Recommended)
 
 ```bash
-pip install requests beautifulsoup4
+pip install git+https://github.com/Yoshi-404/train-status_webscraper.git
 ```
+
+### Local Development Installation
+
+```bash
+git clone https://github.com/Yoshi-404/train-status_webscraper.git
+cd train-status_webscraper
+pip install -e .
+```
+
+---
 
 ## Usage
 
+### 1. Interactive CLI Mode
+
+After installing via pip, you can run the CLI command `train-search` or execute the script directly:
+
 ```bash
+# After pip install:
+train-search
+
+# Or run directly:
 python train.py
 ```
 
-Running the script will prompt you for the following, in order:
+Prompts you interactively for search criteria (pressing Enter accepts defaults):
 
-1. **出発駅を入力してください：** (Departure station) e.g. Wakayama
-2. **到着駅を入力してください：** (Destination station) e.g. Namba
-3. **出発時間で検索するなら1、到着時間で検索するなら4を入力してください：** (Enter `1` to search by departure time, `4` to search by arrival time)
-4. **日付を今日にするなら 1、自分で指定するなら 2 を入力してください：** (Enter `1` to use today's date, `2` to specify a custom date)
-   - If you choose `2`, you'll also be asked for month and day
-5. **時（0-23）：** / **分（0-59）：** (Hour / minute)
+1. **Departure station (出発駅):** e.g., Tokyo (東京)
+2. **Destination station (到着駅):** e.g., Shin-Osaka (新大阪)
+3. **Search type (出発時間 / 到着時間):** Enter `1` for departure time, `4` for arrival time [Default: 1]
+4. **Date option:** Enter `1` for today, `2` for custom date [Default: 1]
+   - If `2`, prompts for year, month, and day
+5. **Time:** Hour (0-23) and Minute (0-59)
 
-Once all inputs are provided, the script prints the search URL it built and then the route details.
+#### Example Output
 
-### Example output
-
-```
-検索URL： https://transit.yahoo.co.jp/search/print?from=和歌山&to=難波&type=1&y=2025&m=04&d=10&hh=08&m1=0&m2=0
-====== 和歌山 から 難波 ======
-所要時間：1時間5分
-乗換：1回
-料金：970円
+```text
+検索URL： https://transit.yahoo.co.jp/search/print?from=東京&to=新大阪&type=1&y=2026&m=10&d=14&hh=09&m1=0&m2=0&shin=1&ex=1&al=1&hb=1&lb=1&sr=1
+====== 東京 から 新大阪 ======
+所要時間：09:00発→11:30着2時間30分(乗車2時間30分)
+乗換：0回
+料金：IC優先：13,870円（乗車券8,910円　特別料金4,960円）
 ======乗り換え情報======
-和歌山
- | JR阪和線 45分 650円
-天王寺
- | 南海本線 20分 320円
-難波
+東京 (09:00)
+ | ＪＲ新幹線のぞみ135号(当駅始発)博多行[発] 15番線 → [着] 21番線 [2時間30分 / 5駅 / 自由席：4,960円 / 8,910円]
+新大阪 (11:30)
 ```
 
-(All prompt and output text is in Japanese, since the source data is Yahoo! Japan's transit site.)
+---
 
-## Notes / Limitations
+### 2. Usage as a Python Library
 
-- The script scrapes Yahoo! Transit's HTML structure, so it may break if the site changes its layout.
-- The search year (`year`) is hardcoded to `2025` and must be updated manually for future years.
-- Station names must match Yahoo! Transit's naming; typos or ambiguous/duplicate station names can return unexpected routes.
-- There is no error handling for network failures, timeouts, or missing HTML elements — the script will raise an exception if the request fails or the page structure differs from what's expected.
+Import `search_route` directly into your own applications, bots, or automation workflows:
+
+```python
+from train import search_route, RouteNotFoundError
+
+try:
+    # Nationwide search including Shinkansen
+    route = search_route(
+        departure_station="東京",
+        destination_station="新大阪",
+        search_type=1,           # 1: depart by, 4: arrive by
+        include_shinkansen=True, # Enable Shinkansen bullet trains (default: True)
+        include_express=True,    # Enable limited express (default: True)
+        include_airplane=True,   # Enable flights (default: True)
+        timeout=10.0             # Timeout in seconds
+    )
+
+    print(f"From: {route.departure} -> To: {route.destination}")
+    print(f"Total Time: {route.total_time}")
+    print(f"Transfers: {route.transfers}")
+    print(f"Total Fare: {route.fare}")
+    print(f"Search URL: {route.search_url}")
+
+    print("\n--- Route Legs ---")
+    for step in route.steps:
+        print(f"[{step.departure_station} ({step.departure_time})] -> [{step.arrival_station} ({step.arrival_time})]")
+        print(f"  Transport: {step.transport}")
+        if step.stops:
+            print(f"  Stops: {step.stops}")
+        if step.fare:
+            print(f"  Fare: {step.fare}")
+
+except RouteNotFoundError as e:
+    print(f"⚠️ Route not found: {e}")
+except Exception as e:
+    print(f"⚠️ Unexpected error: {e}")
+```
+
+#### Available Data Structures (`Route` / `RouteStep`)
+
+- **`Route`**
+  - `departure`: Departure station
+  - `destination`: Destination station
+  - `search_url`: Raw Yahoo! Transit search URL
+  - `total_time`: Total travel time string
+  - `transfers`: Number of transfers
+  - `fare`: Total calculated fare
+  - `steps`: List of travel segments (`List[RouteStep]`)
+  - `stations`: List of all station names visited (`List[str]`)
+
+- **`RouteStep`**
+  - `departure_station`: Departure station for this leg
+  - `arrival_station`: Arrival station for this leg
+  - `transport`: Train/bus line name or `徒歩` (walking)
+  - `departure_time`: Departure timestamp
+  - `arrival_time`: Arrival timestamp
+  - `estimated_time`: Segment travel duration
+  - `fare`: Segment fare
+  - `stops`: Number of intermediate stops
+  - `departure_platform`: Departure track / platform number
+  - `arrival_platform`: Arrival track / platform number
+
+---
+
+## 3. Running Tests
+
+The project includes unit tests with offline HTML fixtures and network mocks:
+
+```bash
+python -m unittest discover tests -v
+```
+
+---
 
 ## License
 
-No license specified. Add one if you plan to share or open-source this project.
+This project is licensed under the [MIT License](LICENSE).
