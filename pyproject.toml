@@ -39,13 +39,17 @@ dependencies = [
 ]
 
 [project.scripts]
-train-search = "train:main"
-train = "train:main"
+train-search = "trainstatus.cli:main"
+trainstatus = "trainstatus.cli:main"
+train = "trainstatus.cli:main"
 
 [project.urls]
 "Homepage" = "https://github.com/Yoshi-404/train-status_webscraper"
 "Repository" = "https://github.com/Yoshi-404/train-status_webscraper"
 "Bug Tracker" = "https://github.com/Yoshi-404/train-status_webscraper/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools]
 py-modules = ["train"]

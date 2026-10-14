@@ -1,6 +1,10 @@
-# 路線検索CLI / Pythonライブラリ 🚉 (v0.1.0)
+# 路線検索CLI / Pythonライブラリ 🚉 (trainstatus v0.1.0)
 
-Yahoo!路線情報から乗換案内（所要時間・乗換回数・料金・乗換詳細）を取得するPythonスクリプトおよびライブラリです。新幹線・特急・高速バス・飛行機など日本全国の経路検索に対応しています。
+[![CI](https://github.com/Yoshi-404/train-status_webscraper/actions/workflows/ci.yml/badge.svg)](https://github.com/Yoshi-404/train-status_webscraper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
+Yahoo!路線情報から乗換案内（所要時間・乗換回数・料金・乗換詳細）を取得するPythonライブラリおよびCLIツールです。新幹線・特急・高速バス・飛行機など日本全国の経路検索に対応しています。
 
 [English README is here](README_EN.md)
 
@@ -8,17 +12,23 @@ Yahoo!路線情報から乗換案内（所要時間・乗換回数・料金・�
 
 ## 主な特徴
 
-- **日本全国の経路検索に対応**: 新幹線・特急・飛行機・高速バスなどの交通機関を網羅した経路検索が可能
-- **ライブラリ & CLIの両対応**:
-  - PythonスクリプトやWebアプリ、Botなどから `search_route()` で `Route` データクラスとして利用可能
-  - ターミナルから対話形式ですぐに使えるコマンドラインツール（`train-search` または `python train.py`）
-- **動的な現在日時対応**: 年（`year`）のハードコードを撤廃し、実行時の現在年・現在時刻を自動取得
-- **安全なURLクエリ構築**: 手動の文字列連結をやめ、`requests` の `params` による安全なURLエンコーディングを採用
-- **堅牢なエラーハンドリング & パーサー**:
-  - HTTPタイムアウト（デフォルト10秒）
-  - `raise_for_status()` による通信ステータス検査
-  - 駅名誤りや経路未検出時の `RouteNotFoundError` 例外処理
-  - HTML構造変更や欠損データに対する完全な `None` 安全処理
+- **日本全国の経路検索に対応**: 新幹線・特急・飛行機・高速バスなどの全国交通機関を網羅した経路検索が可能
+- **型付き構造化データ**:
+  - `duration_minutes: int`（所要分数、例: `150`）
+  - `transfer_count: int`（乗換回数、例: `0`）
+  - `fare_yen: int`（運賃数値、例: `13870`）
+  - `departure_time` / `arrival_time`（発着時刻、例: `"09:00"`, `"11:30"`）
+  - 整形前のオリジナルテキストも保持
+- **クリーンな路線名 & プラットフォーム分離**:
+  - 路線名から `[発] 17番線 → [着] 23番線` などのプラットフォーム表記を除去し、`departure_platform` と `arrival_platform` に個別格納
+- **計算された各区間の所要時間**: 各区間の発着時刻差分から `duration_minutes` および `estimated_time`（例: `"2時間30分"`）を自動計算
+- **安全なパッケージ構造 (`src/trainstatus`)**: グローバル名前空間を汚染しないプロフェッショナルな設計（従来の `python train.py` 実行との完全な後方互換性も維持）
+- **堅牢なエラーハンドリング**:
+  - ネットワークタイムアウト（デフォルト10秒）
+  - `raise_for_status()` によるHTTPステータス検査
+  - 経路未検出時の `RouteNotFoundError` 例外処理
+  - ページ構造破損時の `RouteParseError` 例外処理
+  - HTML欠損データに対する完全な `None` 安全処理
 
 ---
 
@@ -50,7 +60,7 @@ pipでインストール後、ターミナルで `train-search` コマンドを�
 # pipインストール後
 train-search
 
-# または直接実行
+# または直接実行（リポジトリ直下）
 python train.py
 ```
 
@@ -73,7 +83,7 @@ python train.py
 料金：IC優先：13,870円（乗車券8,910円　特別料金4,960円）
 ======乗り換え情報======
 東京 (09:00)
- | ＪＲ新幹線のぞみ135号(当駅始発)博多行[発] 15番線 → [着] 21番線 [2時間30分 / 5駅 / 自由席：4,960円 / 8,910円]
+ | ＪＲ新幹線のぞみ135号(当駅始発)新大阪行 [2時間30分 / 5駅 / [発] 15番線 → [着] 21番線 / 13,870円 (8,910円 + 4,960円)]
 新大阪 (11:30)
 ```
 
@@ -81,10 +91,10 @@ python train.py
 
 ### 2. Pythonライブラリとしての利用
 
-自作のBot、Webアプリ、バッチスクリプトなどから直接インポートして利用できます。
+BotやWebアプリ、スクリプト等から直接インポートして利用できます。
 
 ```python
-from train import search_route, RouteNotFoundError
+from trainstatus import search_route, RouteNotFoundError
 
 try:
     # 全国検索（新幹線・特急等を含む）
@@ -98,20 +108,22 @@ try:
         timeout=10.0             # タイムアウト秒数
     )
 
-    print(f"出発: {route.departure} -> 到着: {route.destination}")
-    print(f"所要時間: {route.total_time}")
-    print(f"乗換回数: {route.transfers}")
-    print(f"総料金: {route.fare}")
-    print(f"検索URL: {route.search_url}")
+    print(f"経路: {route.departure} -> {route.destination}")
+    print(f"所要分数: {route.duration_minutes} 分 (文字列: {route.total_time})")
+    print(f"乗換回数: {route.transfer_count} 回")
+    print(f"総運賃: {route.fare_yen} 円 (文字列: {route.fare})")
+    print(f"発着時刻: {route.departure_time} 発 -> {route.arrival_time} 着")
 
     print("\n--- 各区間の詳細 ---")
     for step in route.steps:
         print(f"[{step.departure_station} ({step.departure_time})] -> [{step.arrival_station} ({step.arrival_time})]")
-        print(f"  利用路線: {step.transport}")
-        if step.stops:
-            print(f"  停車駅数: {step.stops}")
-        if step.fare:
-            print(f"  区間料金: {step.fare}")
+        print(f"  路線名: {step.transport}")
+        if step.duration_minutes is not None:
+            print(f"  区間所要時間: {step.duration_minutes} 分 ({step.estimated_time})")
+        if step.departure_platform or step.arrival_platform:
+            print(f"  番線: [発] {step.departure_platform or '-'} -> [着] {step.arrival_platform or '-'}")
+        if step.fare_yen is not None:
+            print(f"  区間運賃: {step.fare_yen} 円 ({step.fare})")
 
 except RouteNotFoundError as e:
     print(f"⚠️ ルートが見つかりませんでした: {e}")
@@ -122,36 +134,51 @@ except Exception as e:
 #### 利用可能なデータ構造 (`Route` / `RouteStep`)
 
 - **`Route`**
-  - `departure`: 出発駅
-  - `destination`: 到着駅
-  - `search_url`: Yahoo!路線情報の検索URL
-  - `total_time`: 総所要時間
-  - `transfers`: 乗換回数
-  - `fare`: 総料金
+  - `departure`: 出発駅名 (`str`)
+  - `destination`: 到着駅名 (`str`)
+  - `duration_minutes`: 総所要分数 (`Optional[int]`)
+  - `transfer_count`: 乗換回数 (`int`)
+  - `fare_yen`: 総運賃数値 (`Optional[int]`)
+  - `departure_time`: 出発時刻 (`Optional[str]`, 例: `"09:00"`)
+  - `arrival_time`: 到着時刻 (`Optional[str]`, 例: `"11:30"`)
+  - `total_time`: サマリーテキスト (`str`)
+  - `transfers`: 乗換サマリーテキスト (`str`)
+  - `fare`: 運賃サマリーテキスト (`str`)
   - `steps`: 区間詳細リスト (`List[RouteStep]`)
   - `stations`: 経由駅名リスト (`List[str]`)
+  - `search_url`: Yahoo!路線情報の検索URL (`str`)
 
 - **`RouteStep`**
-  - `departure_station`: 区間の出発駅
-  - `arrival_station`: 区間の到着駅
-  - `transport`: 路線名・種別（例: `ＪＲ新幹線...` や `徒歩`）
-  - `departure_time`: 出発時刻
-  - `arrival_time`: 到着時刻
-  - `estimated_time`: 区間所要時間
-  - `fare`: 区間料金
-  - `stops`: 停車駅数
-  - `departure_platform`: 発車番線
-  - `arrival_platform`: 到着番線
+  - `departure_station`: 出発駅 (`str`)
+  - `arrival_station`: 到着駅 (`str`)
+  - `transport`: クリーンな路線・種別名 (`str`, プラットフォーム情報は含みません)
+  - `departure_time`: 出発時刻 (`str`)
+  - `arrival_time`: 到着時刻 (`str`)
+  - `duration_minutes`: 区間所要分数 (`Optional[int]`)
+  - `estimated_time`: 区間所要時間文字列 (`str`, 例: `"2時間30分"`, `"4分"`)
+  - `fare`: 区間運賃文字列 (`str`)
+  - `fare_yen`: 区間運賃数値 (`Optional[int]`)
+  - `stops`: 停車駅数 (`str`, 例: `"5駅"`)
+  - `departure_platform`: 発車番線 (`str`, 例: `"17番線"`)
+  - `arrival_platform`: 到着番線 (`str`, 例: `"23番線"`)
 
 ---
 
 ## 3. テストの実行
 
-包括的なユニットテストおよびモック通信テストが含まれています：
+軽量化されたオフラインHTMLフィクスチャおよびネットワークモックを含む包括的なテストスイートが付属しています：
 
 ```bash
 python -m unittest discover tests -v
 ```
+
+---
+
+## ⚠️ 免責事項・利用上の注意
+
+- 本プロジェクトは個人利用および学習・研究目的で作成されたオープンソースツールです。
+- データ取得元である [Yahoo!路線情報](https://transit.yahoo.co.jp/) の利用規約および各鉄道・交通事業者の利用ガイドラインを遵守してください。
+- サーバーに過度な負荷をかける短時間での連続アクセスやスクレイピング行為は絶対に行わないでください。
 
 ---
 

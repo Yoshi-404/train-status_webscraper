@@ -1,6 +1,10 @@
-# Transit Route Search CLI & Python Library 🚉 (v0.1.0)
+# Transit Route Search CLI & Python Library 🚉 (trainstatus v0.1.0)
 
-A Python command-line tool and library for fetching transit route info (travel time, transfer count, fare, and step-by-step transfer details) from Yahoo! Transit (Japan). Supports nationwide searches across Japan including Shinkansen bullet trains, limited express trains, highway buses, and domestic flights.
+[![CI](https://github.com/Yoshi-404/train-status_webscraper/actions/workflows/ci.yml/badge.svg)](https://github.com/Yoshi-404/train-status_webscraper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
+A Python command-line tool and library for querying transit routes (travel times, transfer counts, fares, and step-by-step leg details) from Yahoo! Transit (Japan). Supports nationwide searches across Japan including Shinkansen bullet trains, limited express trains, highway buses, and domestic flights.
 
 [日本語版 README はこちら](README.md)
 
@@ -9,16 +13,22 @@ A Python command-line tool and library for fetching transit route info (travel t
 ## Key Features
 
 - **Nationwide Route Search**: Search routes across all of Japan, taking advantage of Shinkansen, limited express trains, highway buses, local buses, and flights.
-- **Both Library & CLI Support**:
-  - Use programmatically via `search_route()` to receive a structured `Route` dataclass in your bots, apps, or scripts.
-  - Interactive terminal tool (`train-search` or `python train.py`).
-- **Dynamic Date & Time**: Removed hardcoded year (`2025`); automatically uses the current year and time.
-- **Safe Query Construction**: Built with `requests` parameter dictionaries (`params=`) for proper, automatic URL encoding.
-- **Robust Error Handling & HTML Parser**:
-  - Request timeouts (default: 10s)
+- **Typed & Structured Data**:
+  - `duration_minutes: int` (e.g. `150`)
+  - `transfer_count: int` (e.g. `0`)
+  - `fare_yen: int` (e.g. `13870`)
+  - `departure_time` / `arrival_time` (e.g. `"09:00"`, `"11:30"`)
+  - Preserves original raw strings for human display
+- **Clean Transport Names & Dedicated Platform Fields**:
+  - Automatically strips platform metadata (`[発] 17番線 → [着] 23番線`) from the train/line name and isolates them in `departure_platform` and `arrival_platform`.
+- **Calculated Leg Durations**:
+  - Auto-calculates duration per leg from station departure and arrival timestamps (`duration_minutes` and `estimated_time`).
+- **Professional Package Layout (`src/trainstatus`)**: Avoids polluting the global Python module namespace while preserving complete backward compatibility with `python train.py`.
+- **Robust Error Handling**:
+  - Configurable timeouts (default: 10s)
   - HTTP status validation with `response.raise_for_status()`
-  - Explicit `RouteNotFoundError` exception when station names are invalid or no routes are found
-  - Defensive `None` checking for all parsed HTML elements
+  - Explicit `RouteNotFoundError` and `RouteParseError` exceptions
+  - Defensive `None` checks across all parsed HTML elements
 
 ---
 
@@ -44,13 +54,13 @@ pip install -e .
 
 ### 1. Interactive CLI Mode
 
-After installing via pip, you can run the CLI command `train-search` or execute the script directly:
+After installing via pip, run `train-search` or execute the script directly:
 
 ```bash
 # After pip install:
 train-search
 
-# Or run directly:
+# Or run directly from repo root:
 python train.py
 ```
 
@@ -73,7 +83,7 @@ Prompts you interactively for search criteria (pressing Enter accepts defaults):
 料金：IC優先：13,870円（乗車券8,910円　特別料金4,960円）
 ======乗り換え情報======
 東京 (09:00)
- | ＪＲ新幹線のぞみ135号(当駅始発)博多行[発] 15番線 → [着] 21番線 [2時間30分 / 5駅 / 自由席：4,960円 / 8,910円]
+ | ＪＲ新幹線のぞみ135号(当駅始発)新大阪行 [2時間30分 / 5駅 / [発] 15番線 → [着] 21番線 / 13,870円 (8,910円 + 4,960円)]
 新大阪 (11:30)
 ```
 
@@ -84,7 +94,7 @@ Prompts you interactively for search criteria (pressing Enter accepts defaults):
 Import `search_route` directly into your own applications, bots, or automation workflows:
 
 ```python
-from train import search_route, RouteNotFoundError
+from trainstatus import search_route, RouteNotFoundError
 
 try:
     # Nationwide search including Shinkansen
@@ -98,60 +108,77 @@ try:
         timeout=10.0             # Timeout in seconds
     )
 
-    print(f"From: {route.departure} -> To: {route.destination}")
-    print(f"Total Time: {route.total_time}")
-    print(f"Transfers: {route.transfers}")
-    print(f"Total Fare: {route.fare}")
-    print(f"Search URL: {route.search_url}")
+    print(f"Route: {route.departure} -> {route.destination}")
+    print(f"Duration: {route.duration_minutes} minutes (raw: {route.total_time})")
+    print(f"Transfers: {route.transfer_count}")
+    print(f"Fare: {route.fare_yen} JPY (raw: {route.fare})")
+    print(f"Schedule: {route.departure_time} -> {route.arrival_time}")
 
     print("\n--- Route Legs ---")
     for step in route.steps:
         print(f"[{step.departure_station} ({step.departure_time})] -> [{step.arrival_station} ({step.arrival_time})]")
         print(f"  Transport: {step.transport}")
-        if step.stops:
-            print(f"  Stops: {step.stops}")
-        if step.fare:
-            print(f"  Fare: {step.fare}")
+        if step.duration_minutes is not None:
+            print(f"  Duration: {step.duration_minutes} min ({step.estimated_time})")
+        if step.departure_platform or step.arrival_platform:
+            print(f"  Platform: [Dep] {step.departure_platform or '-'} -> [Arr] {step.arrival_platform or '-'}")
+        if step.fare_yen is not None:
+            print(f"  Fare: {step.fare_yen} JPY ({step.fare})")
 
 except RouteNotFoundError as e:
     print(f"⚠️ Route not found: {e}")
 except Exception as e:
-    print(f"⚠️ Unexpected error: {e}")
+    print(f"⚠️ Error: {e}")
 ```
 
 #### Available Data Structures (`Route` / `RouteStep`)
 
 - **`Route`**
-  - `departure`: Departure station
-  - `destination`: Destination station
-  - `search_url`: Raw Yahoo! Transit search URL
-  - `total_time`: Total travel time string
-  - `transfers`: Number of transfers
-  - `fare`: Total calculated fare
-  - `steps`: List of travel segments (`List[RouteStep]`)
+  - `departure`: Departure station (`str`)
+  - `destination`: Destination station (`str`)
+  - `duration_minutes`: Total journey duration in minutes (`Optional[int]`)
+  - `transfer_count`: Total number of transfers (`int`)
+  - `fare_yen`: Total fare in Yen (`Optional[int]`)
+  - `departure_time`: Formatted departure time (`Optional[str]`, e.g. `"09:00"`)
+  - `arrival_time`: Formatted arrival time (`Optional[str]`, e.g. `"11:30"`)
+  - `total_time`: Raw summary text (`str`)
+  - `transfers`: Raw transfer text (`str`)
+  - `fare`: Raw fare text (`str`)
+  - `steps`: List of leg segments (`List[RouteStep]`)
   - `stations`: List of all station names visited (`List[str]`)
+  - `search_url`: Raw Yahoo! Transit search URL (`str`)
 
 - **`RouteStep`**
-  - `departure_station`: Departure station for this leg
-  - `arrival_station`: Arrival station for this leg
-  - `transport`: Train/bus line name or `徒歩` (walking)
-  - `departure_time`: Departure timestamp
-  - `arrival_time`: Arrival timestamp
-  - `estimated_time`: Segment travel duration
-  - `fare`: Segment fare
-  - `stops`: Number of intermediate stops
-  - `departure_platform`: Departure track / platform number
-  - `arrival_platform`: Arrival track / platform number
+  - `departure_station`: Leg departure station (`str`)
+  - `arrival_station`: Leg arrival station (`str`)
+  - `transport`: Clean line name / train name (`str`, platform info excluded)
+  - `departure_time`: Departure timestamp (`str`)
+  - `arrival_time`: Arrival timestamp (`str`)
+  - `duration_minutes`: Duration in minutes for this leg (`Optional[int]`)
+  - `estimated_time`: Formatted duration (`str`, e.g. `"2時間30分"`, `"4分"`)
+  - `fare`: Leg fare string (`str`)
+  - `fare_yen`: Leg fare integer in Yen (`Optional[int]`)
+  - `stops`: Intermediate stop count string (`str`, e.g. `"5駅"`)
+  - `departure_platform`: Departure platform / track (`str`, e.g. `"17番線"`)
+  - `arrival_platform`: Arrival platform / track (`str`, e.g. `"23番線"`)
 
 ---
 
 ## 3. Running Tests
 
-The project includes unit tests with offline HTML fixtures and network mocks:
+The project includes an offline test suite with slimmed fixtures and network mocks:
 
 ```bash
 python -m unittest discover tests -v
 ```
+
+---
+
+## ⚠️ Disclaimer & Terms of Use
+
+- This project is an open-source tool created strictly for personal and educational use.
+- Please comply with the Terms of Service of [Yahoo! Transit (Yahoo! JAPAN)](https://transit.yahoo.co.jp/) and the respective data providers.
+- Avoid making automated or high-frequency requests that could cause an unnecessary load on Yahoo! JAPAN servers.
 
 ---
 
