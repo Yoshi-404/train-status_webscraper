@@ -166,10 +166,18 @@ except Exception as e:
 
 ## 3. Running Tests
 
-The project includes an offline test suite with slimmed fixtures and network mocks:
+### Offline Unit Tests (Executed automatically in CI)
+Uses lightweight offline HTML fixtures and mocks, executing deterministically in milliseconds without external network dependencies:
 
 ```bash
 python -m unittest discover tests -v
+```
+
+### Live Network Test (Yahoo! Transit)
+To test connectivity against the live Yahoo! Transit site and catch upstream HTML layout changes (monitored automatically via weekly GitHub Actions):
+
+```bash
+LIVE_TESTS=1 python -m unittest discover tests -v
 ```
 
 ---

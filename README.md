@@ -166,10 +166,18 @@ except Exception as e:
 
 ## 3. テストの実行
 
-軽量化されたオフラインHTMLフィクスチャおよびネットワークモックを含む包括的なテストスイートが付属しています：
+### オフライン単体テスト (CIで自動実行)
+軽量化されたHTMLフィクスチャおよびモックを使用するため、高速（数ミリ秒）かつ外部要因に左右されず確実に実行されます：
 
 ```bash
 python -m unittest discover tests -v
+```
+
+### Yahoo!路線情報へのライブ疎通テスト
+実サービスとの疎通およびレイアウト変更を検証する場合（GitHub Actionsの週次ワークフローでも自動監視）：
+
+```bash
+LIVE_TESTS=1 python -m unittest discover tests -v
 ```
 
 ---

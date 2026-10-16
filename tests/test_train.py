@@ -201,6 +201,16 @@ class TestParseRouteHtml(unittest.TestCase):
         self.assertEqual(step2.duration_minutes, 5)
         self.assertEqual(step2.estimated_time, "5分")
 
+        # 複数区間で共有された通算運賃は各ステップで重複させず、Routeにのみ集約されていること
+        self.assertEqual(route.fare_yen, 1120)
+        self.assertIn("1,120円", route.fare)
+        self.assertEqual(step0.fare, "")
+        self.assertIsNone(step0.fare_yen)
+        self.assertEqual(step1.fare, "")
+        self.assertIsNone(step1.fare_yen)
+        self.assertEqual(step2.fare, "")
+        self.assertIsNone(step2.fare_yen)
+
     def test_parse_not_found_raises_route_not_found_error(self):
         html = load_fixture("not_found_station.html")
         with self.assertRaises(RouteNotFoundError):
@@ -305,6 +315,10 @@ class TestFormatRoute(unittest.TestCase):
         self.assertIn("新大阪 (11:30)", formatted)
 
 
+@unittest.skipUnless(
+    os.environ.get("LIVE_TESTS") == "1",
+    "Live tests disabled by default. Set LIVE_TESTS=1 to run against Yahoo! Transit.",
+)
 class TestLiveSearch(unittest.TestCase):
     """
     Yahoo!路線情報の実際のサービスに対するライブ疎通テスト。

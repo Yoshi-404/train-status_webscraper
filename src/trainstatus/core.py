@@ -352,13 +352,17 @@ def parse_route_html(
                     parent_fs_list.append(curr)
                 curr = curr.parent
 
-            # 直近および親の fareSection にある fare タグを収集
+            # 複数アクセス区間で共有されている通算運賃（例：和歌山〜難波のJR区間）は各ステップに重複計上せず、Route.fare_yenに集約
+            is_shared_fare = any(len(fs.find_all("div", class_="access")) > 1 for fs in parent_fs_list)
+
+            # 直近および親の fareSection にある fare タグを収集（単独区間の運賃のみ）
             fares_found = []
-            for fs in parent_fs_list:
-                for p in fs.find_all("p", class_="fare", recursive=False):
-                    f_val = clean_text(p.get_text())
-                    if f_val and f_val not in fares_found:
-                        fares_found.append(f_val)
+            if not is_shared_fare:
+                for fs in parent_fs_list:
+                    for p in fs.find_all("p", class_="fare", recursive=False):
+                        f_val = clean_text(p.get_text())
+                        if f_val and f_val not in fares_found:
+                            fares_found.append(f_val)
 
             # 運賃の合計とテキストの決定
             step_fare_str = ""
